@@ -1,4 +1,3 @@
-
 const express = require("express");
 const path = require("path");
 require("dotenv").config();
@@ -6,70 +5,52 @@ require("dotenv").config();
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Render está detrás de un proxy. Esto permite identificar la IP del visitante.
+app.set("trust proxy", 1);
 app.use(express.json({ limit: "1mb" }));
 app.use(express.static(path.join(__dirname)));
 
-const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 
-app.get("/api/config", (req, res) => {
-  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-    return res.status(500).json({
-      error: "Falta configurar la autenticación en el servidor."
+// Límite básico: hasta 500 mensajes por IP cada 24 horas.
+// Es una protección inicial en memoria; al reiniciar el servidor se reinicia el contador.
+const DAILY_LIMIT = 500;
+const WINDOW_MS = 24 * 60 * 60 * 1000;
+const usageByIp = new Map();
+
+function rateLimitChat(req, res, next) {
+  const ip = req.ip || req.socket.remoteAddress || "unknown";
+  const now = Date.now();
+  let record = usageByIp.get(ip);
+
+  if (!record || now - record.startedAt >= WINDOW_MS) {
+    record = { startedAt: now, count: 0 };
+    usageByIp.set(ip, record);
+  }
+
+  if (record.count >= DAILY_LIMIT) {
+    return res.status(429).json({
+      error: "Has alcanzado el límite de 500 mensajes en 24 horas para esta conexión. Inténtalo más tarde."
     });
   }
 
-  res.json({
-    supabaseUrl: SUPABASE_URL,
-    supabaseAnonKey: SUPABASE_ANON_KEY
-  });
-});
-
-async function verificarUsuario(req, res, next) {
-  try {
-    const authorization = req.headers.authorization || "";
-    const token = authorization.startsWith("Bearer ")
-      ? authorization.slice(7)
-      : "";
-
-    if (!token) {
-      return res.status(401).json({ error: "Inicia sesión para continuar." });
-    }
-
-    const response = await fetch(
-      `${SUPABASE_URL}/auth/v1/user`,
-      {
-        headers: {
-          apikey: SUPABASE_ANON_KEY,
-          Authorization: `Bearer ${token}`
-        }
-      }
-    );
-
-    if (!response.ok) {
-      return res.status(401).json({
-        error: "Tu sesión ha caducado. Inicia sesión nuevamente."
-      });
-    }
-
-    const user = await response.json();
-
-    if (!user.email || !user.email_confirmed_at) {
-      return res.status(403).json({
-        error: "Debes verificar tu correo electrónico."
-      });
-    }
-
-    req.user = user;
-    next();
-  } catch (error) {
-    console.error("Error verificando usuario:", error);
-    res.status(500).json({ error: "No se pudo verificar tu sesión." });
-  }
+  record.count += 1;
+  next();
 }
 
-app.post("/api/chat", verificarUsuario, async (req, res) => {
+// Limpia registros expirados para que el mapa no crezca indefinidamente.
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, record] of usageByIp) {
+    if (now - record.startedAt >= WINDOW_MS) usageByIp.delete(ip);
+  }
+}, 60 * 60 * 1000).unref();
+
+app.get("/api/config", (req, res) => {
+  res.json({ authRequired: false });
+});
+
+app.post("/api/chat", rateLimitChat, async (req, res) => {
   try {
     if (!OPENROUTER_API_KEY) {
       return res.status(500).json({
@@ -77,53 +58,47 @@ app.post("/api/chat", verificarUsuario, async (req, res) => {
       });
     }
 
-    const messages = req.body.messages;
-
-    if (!Array.isArray(messages)) {
-      return res.status(400).json({
-        error: "Formato de mensajes inválido."
-      });
+    const messages = req.body?.messages;
+    if (!Array.isArray(messages) || messages.length === 0) {
+      return res.status(400).json({ error: "Envía al menos un mensaje." });
     }
 
-    if (messages.length > 50) {
-      return res.status(400).json({
-        error: "La conversación es demasiado larga."
-      });
-    }
-
+    // Conserva solo los últimos 30 mensajes y limita el tamaño de cada uno.
     const safeMessages = messages
+      .slice(-30)
       .filter(message =>
         message &&
         ["user", "assistant"].includes(message.role) &&
-        typeof message.content === "string"
+        typeof message.content === "string" &&
+        message.content.trim().length > 0
       )
       .map(message => ({
         role: message.role,
         content: message.content.slice(0, 12000)
       }));
 
-    const response = await fetch(
-      "https://openrouter.ai/api/v1/chat/completions",
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${OPENROUTER_API_KEY}`,
-          "Content-Type": "application/json",
-          "X-Title": "Zare AI"
-        },
-        body: JSON.stringify({
-          model: "openrouter/free",
-          messages: [
-            {
-              role: "system",
-              content:
-                "Tu nombre es Zare. Eres una inteligencia artificial amable, útil y clara. Responde en español cuando el usuario hable español."
-            },
-            ...safeMessages
-          ]
-        })
-      }
-    );
+    if (!safeMessages.length || safeMessages[safeMessages.length - 1].role !== "user") {
+      return res.status(400).json({ error: "El último mensaje debe ser del usuario." });
+    }
+
+    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${OPENROUTER_API_KEY}`,
+        "Content-Type": "application/json",
+        "X-Title": "Zare AI"
+      },
+      body: JSON.stringify({
+        model: "openrouter/free",
+        messages: [
+          {
+            role: "system",
+            content: "Tu nombre es Zare. Eres una inteligencia artificial amable, útil y clara. Responde en español cuando el usuario hable español."
+          },
+          ...safeMessages
+        ]
+      })
+    });
 
     const data = await response.json();
 
@@ -135,9 +110,7 @@ app.post("/api/chat", verificarUsuario, async (req, res) => {
     }
 
     res.json({
-      reply:
-        data.choices?.[0]?.message?.content ||
-        "No recibí una respuesta."
+      reply: data.choices?.[0]?.message?.content || "No recibí una respuesta."
     });
   } catch (error) {
     console.error("Error del chat:", error);
