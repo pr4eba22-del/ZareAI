@@ -74,7 +74,7 @@ async function requireFirebaseUser(req, res, next) {
     if (!FIREBASE_API_KEY) {
       return res.status(500).json({ error: "Firebase no está configurado en el servidor." });
     }
-    const match = (req.headers.authorization || "").match(/^Bearer\\s+(.+)$/i);
+    const match = (req.headers.authorization || "").match(/^Bearer\s+(.+)$/i);
     if (!match) return res.status(401).json({ error: "Inicia sesión con Google para usar Zare AI." });
 
     const verification = await fetch(
