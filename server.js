@@ -11,8 +11,7 @@ app.use(express.json({ limit: "1mb" }));
 app.use(express.static(path.join(__dirname)));
 
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
-const SUPABASE_URL = process.env.SUPABASE_URL?.replace(/\/+$/, "");
-const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
+const FIREBASE_API_KEY = process.env.FIREBASE_API_KEY;
 
 // Límite básico por IP: 500 mensajes cada 24 horas.
 const DAILY_LIMIT = 500;
@@ -53,85 +52,59 @@ setInterval(() => {
 // La clave anon de Supabase puede utilizarse en el cliente;
 // NUNCA publiques una service_role key.
 app.get("/api/config", (req, res) => {
-  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-    return res.status(500).json({
-      error: "Falta configurar SUPABASE_URL o SUPABASE_ANON_KEY en Render."
-    });
+  if (!FIREBASE_API_KEY) {
+    return res.status(500).json({ error: "Falta configurar FIREBASE_API_KEY en Render." });
   }
-
   res.json({
     authRequired: true,
-    supabaseUrl: SUPABASE_URL,
-    supabaseAnonKey: SUPABASE_ANON_KEY
+    firebaseConfig: {
+      apiKey: FIREBASE_API_KEY,
+      authDomain: "zare-ai.firebaseapp.com",
+      projectId: "zare-ai",
+      storageBucket: "zare-ai.firebasestorage.app",
+      messagingSenderId: "477911318547",
+      appId: "1:477911318547:web:e9caed64382ae6b2d7bfe6"
+    }
   });
 });
 
-// Comprueba el token directamente con Supabase Auth.
-async function requireSupabaseUser(req, res, next) {
+// Valida el ID token con Firebase Identity Toolkit.
+async function requireFirebaseUser(req, res, next) {
   try {
-    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-      return res.status(500).json({
-        error: "Supabase no está configurado en el servidor."
-      });
+    if (!FIREBASE_API_KEY) {
+      return res.status(500).json({ error: "Firebase no está configurado en el servidor." });
     }
+    const match = (req.headers.authorization || "").match(/^Bearer\\s+(.+)$/i);
+    if (!match) return res.status(401).json({ error: "Inicia sesión con Google para usar Zare AI." });
 
-    const authorization = req.headers.authorization || "";
-    const match = authorization.match(/^Bearer\s+(.+)$/i);
-
-    if (!match) {
-      return res.status(401).json({
-        error: "Debes iniciar sesión para usar Zare AI."
-      });
-    }
-
-    const supabaseResponse = await fetch(
-      `${SUPABASE_URL}/auth/v1/user`,
+    const verification = await fetch(
+      `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${FIREBASE_API_KEY}`,
       {
-        method: "GET",
-        headers: {
-          apikey: SUPABASE_ANON_KEY,
-          Authorization: `Bearer ${match[1]}`
-        }
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ idToken: match[1] })
       }
     );
-
-    if (!supabaseResponse.ok) {
-      return res.status(401).json({
-        error: "Tu sesión no es válida o ha caducado. Inicia sesión nuevamente."
-      });
+    const result = await verification.json();
+    const user = result.users?.[0];
+    if (!verification.ok || !user?.localId) {
+      return res.status(401).json({ error: "Tu sesión no es válida. Inicia sesión nuevamente." });
     }
-
-    const user = await supabaseResponse.json();
-
-    if (!user?.id) {
-      return res.status(401).json({
-        error: "No se pudo verificar tu cuenta."
-      });
-    }
-
     req.user = user;
     next();
   } catch (error) {
-    console.error("Error verificando sesión de Supabase:", error);
-
-    return res.status(503).json({
-      error: "No se pudo verificar tu sesión. Inténtalo nuevamente."
-    });
+    console.error("Error verificando sesión de Firebase:", error);
+    return res.status(503).json({ error: "No se pudo verificar tu sesión. Inténtalo nuevamente." });
   }
 }
 
-// Estado de autenticación y configuración.
-app.get("/api/me", requireSupabaseUser, (req, res) => {
-  res.json({
-    id: req.user.id,
-    email: req.user.email || null,
-    emailConfirmed: Boolean(req.user.email_confirmed_at)
-  });
+app.get("/api/me", requireFirebaseUser, (req, res) => {
+  res.json({ id: req.user.localId, email: req.user.email || null, emailVerified: Boolean(req.user.emailVerified) });
 });
 
 app.post(
   "/api/chat",
-  requireSupabaseUser,
+  requireFirebaseUser,
   rateLimitChat,
   async (req, res) => {
     try {
