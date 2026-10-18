@@ -129,6 +129,17 @@
           if (!response.ok || !configData.firebaseConfig) throw new Error(configData.error || "No se pudo cargar Firebase.");
           if (!firebase.apps.length) firebase.initializeApp(configData.firebaseConfig);
           firebaseAuth = firebase.auth();
+
+          // Completa el inicio de sesión de Google cuando Firebase regresa
+          // después de signInWithRedirect (más compatible con Electron que popup).
+          try {
+            await firebaseAuth.getRedirectResult();
+          } catch (error) {
+            console.error("Error al completar el inicio de sesión:", error);
+            $("loginStatus").textContent =
+              error.message || "No se pudo completar el inicio de sesión con Google.";
+          }
+
           firebaseAuth.onAuthStateChanged(user => {
             firebaseUser = user;
             $("loginScreen").classList.toggle("hidden", Boolean(user));
@@ -152,7 +163,10 @@
         try {
           const provider = new firebase.auth.GoogleAuthProvider();
           provider.setCustomParameters({ prompt: "select_account" });
-          await firebaseAuth.signInWithPopup(provider);
+          // Electron puede bloquear o no conectar correctamente ventanas popup.
+          // El flujo redirect evita depender de window.open().
+          await firebaseAuth.signInWithRedirect(provider);
+          return;
         } catch (error) {
           $("loginStatus").textContent = error.code === "auth/popup-closed-by-user"
             ? "Cerraste la ventana de Google antes de iniciar sesión."
