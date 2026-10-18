@@ -130,11 +130,33 @@
           if (!firebase.apps.length) firebase.initializeApp(configData.firebaseConfig);
           firebaseAuth = firebase.auth();
 
-          // Completa el inicio de sesión de Google cuando Firebase regresa
-          // después de signInWithRedirect (más compatible con Electron que popup).
+          // Escucha primero los cambios de sesión para que el chat se abra
+          // inmediatamente cuando Firebase confirme la cuenta.
+          firebaseAuth.onAuthStateChanged(user => {
+            firebaseUser = user;
+            $("loginScreen").classList.toggle("hidden", Boolean(user));
+            $("chatApp").classList.toggle("hidden", !user);
+            $("userEmail").textContent = user?.email || "";
+            if (user) {
+              $("loginStatus").textContent = "";
+              renderHistory();
+              if (activeConversationId) renderConversation();
+            }
+          });
+
+          // Completa el inicio de sesión tras regresar de Google.
           try {
-            await firebaseAuth.getRedirectResult();
+            const result = await firebaseAuth.getRedirectResult();
+            if (result && result.user) {
+              firebaseUser = result.user;
+              $("loginStatus").textContent = "";
+            }
           } catch (error) {
+            console.error("Error al completar el inicio de sesión:", error);
+            $("loginStatus").textContent =
+              error.message || "No se pudo completar el inicio de sesión con Google.";
+          }
+        } catch (error) {
             console.error("Error al completar el inicio de sesión:", error);
             $("loginStatus").textContent =
               error.message || "No se pudo completar el inicio de sesión con Google.";
