@@ -13,6 +13,14 @@
     .brand{display:flex;align-items:center;gap:12px;font-size:23px;font-weight:700;letter-spacing:-.8px}
     .logo{display:grid;place-items:center;width:42px;height:42px;border-radius:14px;background:var(--accent);color:white;font-weight:800}
     .muted{color:var(--muted)}
+
+    #loginScreen{min-height:100dvh;display:flex;align-items:center;justify-content:center;padding:24px;background:radial-gradient(circle at top,#183b35,#111 60%)}
+    .login-card{width:min(100%,420px);padding:32px;border:1px solid #383838;border-radius:24px;background:#191919;text-align:center;box-shadow:0 24px 80px #0007}
+    .login-card .logo{margin:0 auto 18px;width:58px;height:58px;font-size:25px}
+    .login-card h1{margin:0 0 8px;font-size:30px}.login-card p{color:var(--muted);margin:0 0 24px}
+    .google-button{width:100%;display:flex;justify-content:center;align-items:center;gap:12px;padding:13px;border:1px solid #555;border-radius:12px;background:#f7f7f7;color:#222;font-weight:650}
+    .google-button:disabled{opacity:.6;cursor:wait}.login-status{min-height:24px;margin-top:16px;color:#ffaaaa;font-size:13px;overflow-wrap:anywhere}
+    .account-button{border:1px solid #444;border-radius:10px;background:#252525;color:#eee;padding:7px 11px}
     .app{height:100dvh;display:flex;overflow:hidden}
     .sidebar{width:260px;flex-shrink:0;display:flex;flex-direction:column;gap:8px;padding:18px 14px;background:var(--sidebar);border-right:1px solid #303030;overflow:auto}
     .sidebar.closed{display:none}
@@ -56,19 +64,28 @@
   </style>
 </head>
 <body>
-  <section id="chatApp" class="app">
+  <section id="loginScreen">
+    <div class="login-card">
+      <div class="logo">Z</div>
+      <h1>Bienvenido a Zare AI</h1>
+      <p>Inicia sesión con tu cuenta de Google para continuar.</p>
+      <button id="googleLogin" class="google-button" type="button"><span style="font-size:20px;font-weight:800">G</span> Continuar con Google</button>
+      <div id="loginStatus" class="login-status" role="status"></div>
+    </div>
+  </section>
+  <section id="chatApp" class="app hidden"> class="app">
     <aside id="sidebar" class="sidebar">
       <div class="brand"><div class="logo">Z</div><span>Zare AI</span></div>
       <button id="newChat" class="side-button" type="button">＋ Nuevo chat</button>
       <div class="history-title">Tus conversaciones</div>
       <div id="history"></div>
-      <div class="sidebar-footer">Sin cuenta ni correo electrónico</div>
+      <div class="sidebar-footer">Sesión protegida con Google</div>
     </aside>
     <main class="main">
       <header class="topbar">
         <button id="menuButton" class="mobile-menu" type="button" aria-label="Abrir menú">☰</button>
         <strong>Zare AI <span class="muted">⌄</span></strong>
-        <span class="muted">Asistente personal</span>
+        <div style="display:flex;align-items:center;gap:10px"><span id="userEmail" class="muted"></span><button id="logoutButton" class="account-button" type="button">Salir</button></div>
       </header>
       <section id="conversation" class="conversation">
         <div id="welcome" class="welcome">
@@ -92,6 +109,8 @@
       </div>
     </main>
   </section>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
   <script>
     (() => {
       "use strict";
@@ -99,7 +118,54 @@
       let conversations = loadConversations();
       let activeConversationId = conversations[0]?.id || null;
       let busy = false;
+      let firebaseAuth = null;
+      let firebaseUser = null;
       const $ = id => document.getElementById(id);
+
+      async function setupFirebase() {
+        try {
+          const response = await fetch("/api/config");
+          const configData = await response.json();
+          if (!response.ok || !configData.firebaseConfig) throw new Error(configData.error || "No se pudo cargar Firebase.");
+          if (!firebase.apps.length) firebase.initializeApp(configData.firebaseConfig);
+          firebaseAuth = firebase.auth();
+          firebaseAuth.onAuthStateChanged(user => {
+            firebaseUser = user;
+            $("loginScreen").classList.toggle("hidden", Boolean(user));
+            $("chatApp").classList.toggle("hidden", !user);
+            $("userEmail").textContent = user?.email || "";
+            if (user) {
+              $("loginStatus").textContent = "";
+              renderHistory();
+              if (activeConversationId) renderConversation();
+            }
+          });
+        } catch (error) {
+          $("loginStatus").textContent = error.message || "No se pudo conectar con Firebase.";
+        }
+      }
+
+      $("googleLogin").addEventListener("click", async () => {
+        if (!firebaseAuth) return $("loginStatus").textContent = "Firebase todavía está cargando. Inténtalo otra vez.";
+        $("googleLogin").disabled = true;
+        $("loginStatus").textContent = "Abriendo el inicio de sesión de Google...";
+        try {
+          const provider = new firebase.auth.GoogleAuthProvider();
+          provider.setCustomParameters({ prompt: "select_account" });
+          await firebaseAuth.signInWithPopup(provider);
+        } catch (error) {
+          $("loginStatus").textContent = error.code === "auth/popup-closed-by-user"
+            ? "Cerraste la ventana de Google antes de iniciar sesión."
+            : (error.message || "No se pudo iniciar sesión con Google.");
+        } finally {
+          $("googleLogin").disabled = false;
+        }
+      });
+
+      $("logoutButton").addEventListener("click", async () => {
+        try { if (firebaseAuth) await firebaseAuth.signOut(); }
+        catch (error) { showStatus("No se pudo cerrar sesión: " + error.message, true); }
+      });
 
       function loadConversations() {
         try {
@@ -249,6 +315,7 @@
       // Mostrar el historial y restaurar la última conversación guardada.
       renderHistory();
       if (activeConversationId) renderConversation();
+      setupFirebase();
       document.querySelectorAll(".suggestion").forEach(button => {
         button.addEventListener("click", () => {
           $("prompt").value = button.textContent;
@@ -305,7 +372,7 @@
         try {
           const response = await fetch("/api/chat", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: { "Content-Type": "application/json", "Authorization": "Bearer " + await firebaseUser.getIdToken() },
             body: JSON.stringify({ messages: conversation.messages })
           });
           const data = await response.json();
