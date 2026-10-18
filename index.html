@@ -123,58 +123,57 @@
       const $ = id => document.getElementById(id);
 
       async function setupFirebase() {
+        const loginScreen = $("loginScreen");
+        const chatApp = $("chatApp");
+        const loginStatus = $("loginStatus");
+
         try {
-          const response = await fetch("/api/config");
+          const response = await fetch("/api/config", { cache: "no-store" });
           const configData = await response.json();
-          if (!response.ok || !configData.firebaseConfig) throw new Error(configData.error || "No se pudo cargar Firebase.");
+          if (!response.ok || !configData.firebaseConfig) {
+            throw new Error(configData.error || "No se pudo cargar la configuración de inicio de sesión.");
+          }
+
           if (!firebase.apps.length) firebase.initializeApp(configData.firebaseConfig);
           firebaseAuth = firebase.auth();
 
-          // Escucha primero los cambios de sesión para que el chat se abra
-          // inmediatamente cuando Firebase confirme la cuenta.
+          // Registrar un solo listener evita estados de interfaz duplicados.
           firebaseAuth.onAuthStateChanged(user => {
-            firebaseUser = user;
-            $("loginScreen").classList.toggle("hidden", Boolean(user));
-            $("chatApp").classList.toggle("hidden", !user);
+            firebaseUser = user || null;
+            loginScreen.classList.toggle("hidden", Boolean(user));
+            chatApp.classList.toggle("hidden", !user);
             $("userEmail").textContent = user?.email || "";
+
             if (user) {
-              $("loginStatus").textContent = "";
+              loginStatus.textContent = "";
               renderHistory();
               if (activeConversationId) renderConversation();
             }
+          }, error => {
+            console.error("Firebase no pudo comprobar la sesión:", error);
+            loginStatus.textContent = "No se pudo comprobar tu sesión: " + (error.code || error.message);
           });
 
-          // Completa el inicio de sesión tras regresar de Google.
           try {
             const result = await firebaseAuth.getRedirectResult();
-            if (result && result.user) {
+            if (result?.user) {
               firebaseUser = result.user;
-              $("loginStatus").textContent = "";
-            }
-          } catch (error) {
-            console.error("Error al completar el inicio de sesión:", error);
-            $("loginStatus").textContent =
-              error.message || "No se pudo completar el inicio de sesión con Google.";
-          }
-        } catch (error) {
-            console.error("Error al completar el inicio de sesión:", error);
-            $("loginStatus").textContent =
-              error.message || "No se pudo completar el inicio de sesión con Google.";
-          }
-
-          firebaseAuth.onAuthStateChanged(user => {
-            firebaseUser = user;
-            $("loginScreen").classList.toggle("hidden", Boolean(user));
-            $("chatApp").classList.toggle("hidden", !user);
-            $("userEmail").textContent = user?.email || "";
-            if (user) {
-              $("loginStatus").textContent = "";
+              loginStatus.textContent = "";
+              loginScreen.classList.add("hidden");
+              chatApp.classList.remove("hidden");
+              $("userEmail").textContent = result.user.email || "";
               renderHistory();
               if (activeConversationId) renderConversation();
             }
-          });
+          } catch (error) {
+            console.error("Error al regresar de Google:", error);
+            loginStatus.textContent = "Google no pudo completar el acceso (" +
+              (error.code || "error") + "): " + (error.message || "Inténtalo otra vez.");
+          }
         } catch (error) {
-          $("loginStatus").textContent = error.message || "No se pudo conectar con Firebase.";
+          console.error("Error al iniciar Firebase:", error);
+          loginStatus.textContent = "No se pudo iniciar el acceso (" +
+            (error.code || "configuración") + "): " + (error.message || "Comprueba la conexión.");
         }
       }
 
