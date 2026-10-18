@@ -5,28 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Zare AI</title>
   <meta name="theme-color" content="#111111">
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
-    :root{color-scheme:dark;--bg:#212121;--sidebar:#171717;--panel:#2f2f2f;--border:#383838;--text:#f5f5f5;--muted:#a0a0a0;--accent:#10a37f}
+    :root{color-scheme:dark;--bg:#212121;--sidebar:#171717;--border:#383838;--text:#f5f5f5;--muted:#a0a0a0;--accent:#10a37f}
     *{box-sizing:border-box}
     body{margin:0;background:var(--bg);color:var(--text);font:15px/1.5 system-ui,-apple-system,sans-serif}
-    button,input,textarea{font:inherit}
-    button{cursor:pointer}
-    .hidden{display:none!important}
-    .auth-screen{min-height:100vh;display:grid;place-items:center;padding:24px;background:radial-gradient(ellipse at top,#18342f 0%,transparent 50%),#111}
-    .auth-card{width:min(100%,420px);padding:34px;border:1px solid #383838;border-radius:24px;background:#1b1b1b;box-shadow:0 24px 80px #0006}
+    button,textarea{font:inherit}button{cursor:pointer}.hidden{display:none!important}
     .brand{display:flex;align-items:center;gap:12px;font-size:23px;font-weight:700;letter-spacing:-.8px}
     .logo{display:grid;place-items:center;width:42px;height:42px;border-radius:14px;background:var(--accent);color:white;font-weight:800}
-    .auth-card h1{margin:28px 0 8px;font-size:27px;letter-spacing:-.8px}
     .muted{color:var(--muted)}
-    .field{display:block;width:100%;margin:20px 0 12px;padding:14px 15px;border:1px solid #444;border-radius:12px;outline:none;background:#252525;color:white}
-    .field:focus{border-color:var(--accent);box-shadow:0 0 0 3px #10a37f25}
-    .primary{width:100%;padding:13px 16px;border:0;border-radius:12px;background:var(--accent);color:white;font-weight:650}
-    .primary:hover{filter:brightness(1.08)}
-    .primary:disabled{opacity:.55;cursor:wait}
-    .message{margin-top:14px;min-height:24px;font-size:13px;overflow-wrap:anywhere}
-    .link-button{margin-top:14px;border:0;background:none;color:#9ddfc9;padding:4px 0}
-    .link-button:disabled{opacity:.5;cursor:wait}
     .app{height:100dvh;display:flex;overflow:hidden}
     .sidebar{width:260px;flex-shrink:0;padding:16px 12px;display:flex;flex-direction:column;gap:12px;background:var(--sidebar);border-right:1px solid #282828}
     .sidebar .brand{padding:5px 7px 12px}
@@ -34,9 +20,6 @@
     .side-button:hover,.history-item:hover{background:#292929}
     .history-title{margin:15px 8px 0;font-size:12px;color:var(--muted)}
     .history-item{display:block;width:100%;padding:9px;border:0;border-radius:9px;background:transparent;color:#ddd;text-align:left;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
-    .account{margin-top:auto;padding:12px 8px 2px;border-top:1px solid #333;overflow-wrap:anywhere}
-    .account-email{margin:0 0 10px;color:#ddd;font-size:12px}
-    .logout{border:0;padding:0;background:none;color:#bbb}
     .main{min-width:0;flex:1;display:flex;flex-direction:column;position:relative}
     .topbar{height:58px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;padding:0 22px;border-bottom:1px solid #292929}
     .mobile-menu{display:none;border:0;background:none;color:white;font-size:22px}
@@ -48,67 +31,28 @@
     .suggestion{padding:10px 13px;border:1px solid #414141;border-radius:18px;background:transparent;color:#ddd}
     .suggestion:hover{background:#303030}
     .messages{width:min(100%,780px);margin:0 auto;display:flex;flex-direction:column;gap:25px}
-    .message-row{display:flex;gap:13px}
-    .message-row.user{justify-content:flex-end}
+    .message-row{display:flex;gap:13px}.message-row.user{justify-content:flex-end}
     .bubble{max-width:85%;padding:12px 16px;border-radius:18px;overflow-wrap:anywhere;white-space:pre-wrap}
-    .user .bubble{background:#303030}
-    .assistant .bubble{padding-left:0}
+    .user .bubble{background:#303030}.assistant .bubble{padding-left:0}
     .avatar{flex-shrink:0;width:30px;height:30px;display:grid;place-items:center;border-radius:10px;background:var(--accent);font-size:12px;font-weight:bold}
     .composer-area{flex-shrink:0;padding:10px 20px 20px;background:linear-gradient(transparent,var(--bg) 15%)}
     .composer{width:min(100%,780px);margin:0 auto;display:flex;align-items:flex-end;gap:10px;padding:10px 10px 10px 17px;border:1px solid #484848;border-radius:24px;background:#303030;box-shadow:0 8px 30px #0002}
     .composer textarea{flex:1;min-width:0;max-height:180px;resize:none;border:0;outline:0;padding:8px 0;background:transparent;color:white}
     .send{width:38px;height:38px;flex-shrink:0;border:0;border-radius:50%;background:white;color:#171717;font-size:20px;font-weight:bold}
-    .send:disabled{opacity:.45}
-    .disclaimer{margin:8px 0 0;text-align:center;color:var(--muted);font-size:11px}
-    @media(max-width:700px){
-      .sidebar{position:fixed;z-index:5;inset:0 auto 0 0;transform:translateX(-105%);transition:transform .2s ease;box-shadow:10px 0 35px #0005}
-      .sidebar.open{transform:translateX(0)}
-      .mobile-menu{display:inline-block}
-      .topbar{padding:0 14px}
-      .conversation{padding:20px 14px}
-      .composer-area{padding:8px 10px 12px}
-      .auth-card{padding:26px}
-    }
+    .send:disabled{opacity:.45}.disclaimer{margin:8px 0 0;text-align:center;color:var(--muted);font-size:11px}
+    .status{width:min(100%,780px);margin:0 auto 8px;color:#ffaaaa;font-size:13px}
+    .sidebar-footer{margin-top:auto;border-top:1px solid #333;padding:12px 8px;color:var(--muted);font-size:12px}
+    @media(max-width:700px){.sidebar{position:fixed;z-index:5;inset:0 auto 0 0;transform:translateX(-105%);transition:transform .2s ease;box-shadow:10px 0 35px #0005}.sidebar.open{transform:translateX(0)}.mobile-menu{display:inline-block}.topbar{padding:0 14px}.conversation{padding:20px 14px}.composer-area{padding:8px 10px 12px}}
   </style>
 </head>
 <body>
-  <section id="authScreen" class="auth-screen">
-    <div class="auth-card">
-      <div class="brand"><div class="logo">Z</div><span>Zare AI</span></div>
-
-      <div id="emailStep">
-        <h1>Tu espacio de ideas.</h1>
-        <p class="muted">Inicia sesión con tu correo para conversar con Zare.</p>
-        <form id="emailForm">
-          <input id="emailInput" class="field" type="email" placeholder="tu@correo.com" autocomplete="email" required>
-          <button id="emailButton" class="primary" type="submit" disabled>Iniciando...</button>
-        </form>
-      </div>
-
-      <div id="codeStep" class="hidden">
-        <h1>Revisa tu correo</h1>
-        <p class="muted">Te enviamos un código de seis dígitos. Introdúcelo aquí para confirmar tu email.</p>
-        <form id="codeForm">
-          <input id="codeInput" class="field" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" placeholder="Código de 6 dígitos" required>
-          <button id="verifyButton" class="primary" type="submit">Verificar y entrar</button>
-        </form>
-        <button id="resendButton" class="link-button" type="button" disabled>Reenviar código en 15 s</button><br>
-        <button id="backButton" class="logout" type="button" style="margin-top:16px">Usar otro correo</button>
-      </div>
-      <div id="authMessage" class="message" role="status"></div>
-    </div>
-  </section>
-
-  <section id="chatApp" class="app hidden">
+  <section id="chatApp" class="app">
     <aside id="sidebar" class="sidebar">
       <div class="brand"><div class="logo">Z</div><span>Zare AI</span></div>
       <button id="newChat" class="side-button" type="button">＋ Nuevo chat</button>
       <div class="history-title">Tus conversaciones</div>
       <div id="history"></div>
-      <div class="account">
-        <p id="accountEmail" class="account-email"></p>
-        <button id="logoutButton" class="logout" type="button">Cerrar sesión</button>
-      </div>
+      <div class="sidebar-footer">Sin cuenta ni correo electrónico</div>
     </aside>
     <main class="main">
       <header class="topbar">
@@ -129,6 +73,7 @@
         <div id="messages" class="messages"></div>
       </section>
       <div class="composer-area">
+        <div id="status" class="status" role="status"></div>
         <form id="chatForm" class="composer">
           <textarea id="prompt" rows="1" maxlength="12000" placeholder="Escribe un mensaje a Zare..." aria-label="Escribe un mensaje" required></textarea>
           <button id="sendButton" class="send" type="submit" aria-label="Enviar mensaje">↑</button>
@@ -137,249 +82,21 @@
       </div>
     </main>
   </section>
-
   <script>
     (() => {
       "use strict";
-
-      // Un solo nombre de variable para evitar la redeclaración de "supabase".
-      let supabaseClient = null;
-      let accessToken = null;
-      let currentUser = null;
       let conversations = [];
       let activeConversationId = null;
       let busy = false;
-      let resendTimer = null;
-      let resendSeconds = 15;
-
       const $ = id => document.getElementById(id);
 
-      function showMessage(text, error = false) {
-        $("authMessage").textContent = text;
-        $("authMessage").style.color = error ? "#ff8b8b" : "#b7e6d5";
+      function showStatus(message, error = false) {
+        $("status").textContent = message;
+        $("status").style.color = error ? "#ff8b8b" : "#b7e6d5";
       }
-
-      function setBusy(button, value, busyText, normalText) {
-        button.disabled = value;
-        if (busyText && normalText) {
-          button.textContent = value ? busyText : normalText;
-        }
-      }
-
-      function setAuthBusy(value) {
-        $("emailButton").disabled = value || !supabaseClient;
-        if (!value && supabaseClient) $("emailButton").textContent = "Continuar con email";
-      }
-
-      async function init() {
-        try {
-          if (!window.supabase || typeof window.supabase.createClient !== "function") {
-            throw new Error("No se pudo cargar el sistema de autenticación. Recarga la página.");
-          }
-
-          const response = await fetch("/api/config", { cache: "no-store" });
-          const config = await response.json();
-
-          if (!response.ok) throw new Error(config.error || "No se pudo iniciar.");
-          if (!config.supabaseUrl || !config.supabaseAnonKey) {
-            throw new Error("Falta configurar Supabase en el servidor.");
-          }
-
-          supabaseClient = window.supabase.createClient(
-            config.supabaseUrl,
-            config.supabaseAnonKey
-          );
-
-          const { data, error } = await supabaseClient.auth.getSession();
-          if (error) throw error;
-
-          if (data.session) {
-            accessToken = data.session.access_token;
-            currentUser = data.session.user;
-
-            if (currentUser && currentUser.email_confirmed_at) {
-              showChat();
-            } else {
-              await supabaseClient.auth.signOut();
-            }
-          }
-
-          setAuthBusy(false);
-        } catch (error) {
-          showMessage(error.message || "No se pudo iniciar Zare AI.", true);
-          $("emailButton").disabled = true;
-          $("emailButton").textContent = "No disponible";
-          console.error("Error al iniciar Zare AI:", error);
-        }
-      }
-
-      function startResendCountdown() {
-        if (resendTimer) clearInterval(resendTimer);
-
-        resendSeconds = 15;
-        const button = $("resendButton");
-        button.disabled = true;
-        button.textContent = `Reenviar código en ${resendSeconds} s`;
-
-        resendTimer = setInterval(() => {
-          resendSeconds--;
-
-          if (resendSeconds <= 0) {
-            clearInterval(resendTimer);
-            resendTimer = null;
-            button.disabled = false;
-            button.textContent = "Reenviar código";
-          } else {
-            button.textContent = `Reenviar código en ${resendSeconds} s`;
-          }
-        }, 1000);
-      }
-
-      $("emailForm").addEventListener("submit", async event => {
-        event.preventDefault();
-        if (!supabaseClient) {
-          showMessage("Espera a que termine de iniciar el sistema y vuelve a intentarlo.", true);
-          return;
-        }
-
-        const button = $("emailButton");
-        setBusy(button, true, "Enviando código...", "Continuar con email");
-        showMessage("");
-
-        try {
-          const email = $("emailInput").value.trim();
-          const { error } = await supabaseClient.auth.signInWithOtp({
-            email,
-            options: { shouldCreateUser: true }
-          });
-
-          if (error) throw error;
-
-          $("emailStep").classList.add("hidden");
-          $("codeStep").classList.remove("hidden");
-          showMessage("Si el envío está permitido, recibirás un código. Revisa tu correo y spam.");
-          startResendCountdown();
-          $("codeInput").focus();
-        } catch (error) {
-          showMessage(error.message || "No se pudo enviar el código.", true);
-        } finally {
-          button.disabled = false;
-          button.textContent = "Continuar con email";
-        }
-      });
-
-      $("codeForm").addEventListener("submit", async event => {
-        event.preventDefault();
-
-        if (!supabaseClient) {
-          showMessage("El sistema de autenticación no está listo.", true);
-          return;
-        }
-
-        const button = $("verifyButton");
-        setBusy(button, true, "Verificando...", "Verificar y entrar");
-        showMessage("");
-
-        try {
-          const email = $("emailInput").value.trim();
-          const token = $("codeInput").value.trim();
-
-          const { data, error } = await supabaseClient.auth.verifyOtp({
-            email,
-            token,
-            type: "email"
-          });
-
-          if (error) throw error;
-          if (!data.session || !data.user) {
-            throw new Error("No se pudo iniciar sesión. Solicita otro código.");
-          }
-
-          accessToken = data.session.access_token;
-          currentUser = data.user;
-
-          if (!currentUser.email_confirmed_at) {
-            throw new Error("El correo todavía no aparece verificado.");
-          }
-
-          if (resendTimer) clearInterval(resendTimer);
-          showChat();
-        } catch (error) {
-          showMessage(error.message || "El código no es válido o ha expirado.", true);
-        } finally {
-          button.disabled = false;
-          button.textContent = "Verificar y entrar";
-        }
-      });
-
-      $("resendButton").addEventListener("click", async () => {
-        if (!supabaseClient) return;
-
-        const button = $("resendButton");
-        button.disabled = true;
-        button.textContent = "Enviando...";
-        showMessage("");
-
-        try {
-          const email = $("emailInput").value.trim();
-          const { error } = await supabaseClient.auth.signInWithOtp({
-            email,
-            options: { shouldCreateUser: true }
-          });
-
-          if (error) throw error;
-
-          showMessage("Solicitud enviada. Revisa tu correo y spam.");
-          startResendCountdown();
-        } catch (error) {
-          showMessage(error.message || "No se pudo reenviar el código.", true);
-          button.disabled = false;
-          button.textContent = "Intentar reenviar";
-        }
-      });
-
-      $("backButton").addEventListener("click", () => {
-        $("codeStep").classList.add("hidden");
-        $("emailStep").classList.remove("hidden");
-        $("codeInput").value = "";
-        showMessage("");
-        if (resendTimer) clearInterval(resendTimer);
-        resendTimer = null;
-      });
-
-      function showChat() {
-        $("authScreen").classList.add("hidden");
-        $("chatApp").classList.remove("hidden");
-        $("accountEmail").textContent = currentUser?.email || "";
-        renderHistory();
-      }
-
-      $("logoutButton").addEventListener("click", async () => {
-        if (supabaseClient) await supabaseClient.auth.signOut();
-
-        accessToken = null;
-        currentUser = null;
-        conversations = [];
-        activeConversationId = null;
-
-        $("messages").replaceChildren();
-        $("history").replaceChildren();
-        $("chatApp").classList.add("hidden");
-        $("authScreen").classList.remove("hidden");
-        $("emailStep").classList.remove("hidden");
-        $("codeStep").classList.add("hidden");
-        $("emailInput").value = "";
-        $("codeInput").value = "";
-        showMessage("Has cerrado sesión.");
-      });
 
       function newConversation() {
-        const conversation = {
-          id: crypto.randomUUID(),
-          title: "Nuevo chat",
-          messages: []
-        };
-
+        const conversation = { id: crypto.randomUUID(), title: "Nuevo chat", messages: [] };
         conversations.unshift(conversation);
         activeConversationId = conversation.id;
         renderConversation();
@@ -391,82 +108,60 @@
       function renderHistory() {
         const container = $("history");
         container.replaceChildren();
-
         conversations.forEach(conversation => {
           const button = document.createElement("button");
           button.className = "history-item";
           button.textContent = conversation.title;
           button.title = conversation.title;
-
           button.addEventListener("click", () => {
             activeConversationId = conversation.id;
             renderConversation();
             $("sidebar").classList.remove("open");
           });
-
           container.appendChild(button);
         });
       }
 
       function renderConversation() {
         const conversation = conversations.find(item => item.id === activeConversationId);
-
         $("messages").replaceChildren();
-        $("welcome").classList.toggle(
-          "hidden",
-          Boolean(conversation && conversation.messages.length)
-        );
-
+        $("welcome").classList.toggle("hidden", Boolean(conversation && conversation.messages.length));
         if (!conversation) return;
-
-        conversation.messages.forEach(message => {
-          addMessageToUI(message.role, message.content);
-        });
-
+        conversation.messages.forEach(message => addMessageToUI(message.role, message.content));
         $("conversation").scrollTop = $("conversation").scrollHeight;
       }
 
       function addMessageToUI(role, content) {
         $("welcome").classList.add("hidden");
-
         const row = document.createElement("div");
-        row.className = `message-row ${role === "user" ? "user" : "assistant"}`;
-
+        row.className = "message-row " + (role === "user" ? "user" : "assistant");
         if (role === "assistant") {
           const avatar = document.createElement("div");
           avatar.className = "avatar";
           avatar.textContent = "Z";
           row.appendChild(avatar);
         }
-
         const bubble = document.createElement("div");
         bubble.className = "bubble";
         bubble.textContent = content;
         row.appendChild(bubble);
-
         $("messages").appendChild(row);
         $("conversation").scrollTop = $("conversation").scrollHeight;
       }
 
       $("newChat").addEventListener("click", newConversation);
-
       document.querySelectorAll(".suggestion").forEach(button => {
         button.addEventListener("click", () => {
           $("prompt").value = button.textContent;
           $("prompt").focus();
         });
       });
-
-      $("menuButton").addEventListener("click", () => {
-        $("sidebar").classList.toggle("open");
-      });
-
+      $("menuButton").addEventListener("click", () => $("sidebar").classList.toggle("open"));
       $("prompt").addEventListener("input", () => {
         const field = $("prompt");
         field.style.height = "auto";
         field.style.height = Math.min(field.scrollHeight, 180) + "px";
       });
-
       $("prompt").addEventListener("keydown", event => {
         if (event.key === "Enter" && !event.shiftKey) {
           event.preventDefault();
@@ -476,18 +171,10 @@
 
       $("chatForm").addEventListener("submit", async event => {
         event.preventDefault();
-
         if (busy) return;
-        if (!accessToken) {
-          showMessage("Inicia sesión nuevamente para continuar.", true);
-          return;
-        }
-
         const prompt = $("prompt").value.trim();
         if (!prompt) return;
-
         if (!activeConversationId) newConversation();
-
         const conversation = conversations.find(item => item.id === activeConversationId);
         if (!conversation) return;
 
@@ -495,24 +182,20 @@
         $("sendButton").disabled = true;
         $("prompt").value = "";
         $("prompt").style.height = "auto";
-
+        showStatus("");
         conversation.messages.push({ role: "user", content: prompt });
-
         if (conversation.title === "Nuevo chat") {
           conversation.title = prompt.slice(0, 32);
           renderHistory();
         }
-
         renderConversation();
 
         const loadingRow = document.createElement("div");
         loadingRow.className = "message-row assistant";
-
         const loadingAvatar = document.createElement("div");
         loadingAvatar.className = "avatar";
         loadingAvatar.textContent = "Z";
         loadingRow.appendChild(loadingAvatar);
-
         const loadingBubble = document.createElement("div");
         loadingBubble.className = "bubble";
         loadingBubble.textContent = "Zare está pensando...";
@@ -522,45 +205,20 @@
         try {
           const response = await fetch("/api/chat", {
             method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${accessToken}`
-            },
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ messages: conversation.messages })
           });
-
           const data = await response.json();
-
-          if (response.status === 401) {
-            await supabaseClient.auth.signOut();
-            accessToken = null;
-            currentUser = null;
-            $("chatApp").classList.add("hidden");
-            $("authScreen").classList.remove("hidden");
-            $("emailStep").classList.remove("hidden");
-            $("codeStep").classList.add("hidden");
-            throw new Error("Tu sesión expiró. Inicia sesión otra vez.");
-          }
-
           if (!response.ok) throw new Error(data.error || "Error del servidor.");
-
-          conversation.messages.push({
-            role: "assistant",
-            content: data.reply || "No recibí una respuesta."
-          });
+          conversation.messages.push({ role: "assistant", content: data.reply || "No recibí una respuesta." });
         } catch (error) {
-          conversation.messages.push({
-            role: "assistant",
-            content: "No pude responder: " + error.message
-          });
+          conversation.messages.push({ role: "assistant", content: "No pude responder: " + error.message });
         } finally {
           busy = false;
           $("sendButton").disabled = false;
           renderConversation();
         }
       });
-
-      init();
     })();
   </script>
 </body>
