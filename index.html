@@ -14,7 +14,7 @@
     .logo{display:grid;place-items:center;width:42px;height:42px;border-radius:14px;background:var(--accent);color:white;font-weight:800}
     .muted{color:var(--muted)}
     .app{height:100dvh;display:flex;overflow:hidden}
-    .sidebar{width:260px;flex-shrink:0;padding:16px 12px;display:flex;flex-direction:column;gap:12px;background:var(--sidebar);border-right:1px solid #282828}
+    .sidebar{display:none!important}
     .sidebar .brand{padding:5px 7px 12px}
     .side-button{padding:11px 12px;border:1px solid #3c3c3c;border-radius:12px;background:transparent;color:var(--text);text-align:left}
     .side-button:hover,.history-item:hover{background:#292929}
@@ -33,6 +33,14 @@
     .messages{width:min(100%,780px);margin:0 auto;display:flex;flex-direction:column;gap:25px}
     .message-row{display:flex;gap:13px}.message-row.user{justify-content:flex-end}
     .bubble{max-width:85%;padding:12px 16px;border-radius:18px;overflow-wrap:anywhere;white-space:pre-wrap}
+    .code-block{max-width:100%;margin:12px 0;border:1px solid #444;border-radius:12px;overflow:hidden;background:#111}
+    .code-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 12px;background:#252525;color:#bbb;font-size:12px}
+    .copy-code{border:1px solid #555;border-radius:8px;padding:5px 10px;background:#333;color:#fff;font-size:12px}
+    .copy-code:hover{background:#444}
+    .code-block pre{margin:0;padding:14px;overflow:auto;white-space:pre}
+    .code-block code{font:13px/1.6 ui-monospace,SFMono-Regular,Consolas,monospace;color:#e8e8e8}
+    .assistant .bubble{white-space:normal}
+    .assistant .bubble .plain-text{white-space:pre-wrap}
     .user .bubble{background:#303030}.assistant .bubble{padding-left:0}
     .avatar{flex-shrink:0;width:30px;height:30px;display:grid;place-items:center;border-radius:10px;background:var(--accent);font-size:12px;font-weight:bold}
     .composer-area{flex-shrink:0;padding:10px 20px 20px;background:linear-gradient(transparent,var(--bg) 15%)}
@@ -131,6 +139,76 @@
         $("conversation").scrollTop = $("conversation").scrollHeight;
       }
 
+      function renderAssistantContent(container, content) {
+        // Reconoce bloques Markdown ```lang ... ``` y añade copiar sin ejecutar código.
+        const pattern = /```([^\n`]*)\n([\s\S]*?)```/g;
+        let lastIndex = 0;
+        let match;
+        while ((match = pattern.exec(content)) !== null) {
+          if (match.index > lastIndex) {
+            const textNode = document.createElement("div");
+            textNode.className = "plain-text";
+            textNode.textContent = content.slice(lastIndex, match.index);
+            container.appendChild(textNode);
+          }
+
+          const language = (match[1] || "").trim() || "código";
+          const codeText = match[2].replace(/\n$/, "");
+          const block = document.createElement("div");
+          block.className = "code-block";
+
+          const toolbar = document.createElement("div");
+          toolbar.className = "code-toolbar";
+
+          const languageLabel = document.createElement("span");
+          languageLabel.textContent = language;
+          toolbar.appendChild(languageLabel);
+
+          const copyButton = document.createElement("button");
+          copyButton.type = "button";
+          copyButton.className = "copy-code";
+          copyButton.textContent = "📋 Copiar código";
+          copyButton.addEventListener("click", async () => {
+            try {
+              if (navigator.clipboard && window.isSecureContext) {
+                await navigator.clipboard.writeText(codeText);
+              } else {
+                const temporary = document.createElement("textarea");
+                temporary.value = codeText;
+                temporary.style.position = "fixed";
+                temporary.style.opacity = "0";
+                document.body.appendChild(temporary);
+                temporary.select();
+                const copied = document.execCommand("copy");
+                temporary.remove();
+                if (!copied) throw new Error("No se pudo copiar");
+              }
+              copyButton.textContent = "✓ Copiado";
+              setTimeout(() => { copyButton.textContent = "📋 Copiar código"; }, 1600);
+            } catch {
+              copyButton.textContent = "No se pudo copiar";
+              setTimeout(() => { copyButton.textContent = "📋 Copiar código"; }, 1600);
+            }
+          });
+          toolbar.appendChild(copyButton);
+
+          const pre = document.createElement("pre");
+          const code = document.createElement("code");
+          code.textContent = codeText;
+          pre.appendChild(code);
+          block.append(toolbar, pre);
+          container.appendChild(block);
+          lastIndex = pattern.lastIndex;
+        }
+
+        if (lastIndex < content.length || lastIndex === 0) {
+          const textNode = document.createElement("div");
+          textNode.className = "plain-text";
+          textNode.textContent = content.slice(lastIndex);
+          container.appendChild(textNode);
+        }
+      }
+
       function addMessageToUI(role, content) {
         $("welcome").classList.add("hidden");
         const row = document.createElement("div");
@@ -143,7 +221,8 @@
         }
         const bubble = document.createElement("div");
         bubble.className = "bubble";
-        bubble.textContent = content;
+        if (role === "assistant") renderAssistantContent(bubble, content);
+        else bubble.textContent = content;
         row.appendChild(bubble);
         $("messages").appendChild(row);
         $("conversation").scrollTop = $("conversation").scrollHeight;
